@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -17,9 +19,10 @@ var (
 		"9":  {"2": "Windspeed_Avg", "3": "Windspeed_Min", "4": "Windspeed_Max"},
 		"4":  {"2": "Wind Direction_Avg", "3": "Wind Direction_Min", "4": "Wind Direction_Max"},
 		"13": {"2": "Pressure_Avg", "3": "Pressure_Min", "4": "Pressure_Max"},
+		"10": {"7": "Rainfall_Acc"},
 	}
 	// Required measurements
-	requiredMeasurements = []string{"Temperature_Avg", "Humidity_Avg", "Windspeed_Avg", "Wind Direction_Avg", "Pressure_Avg"}
+	requiredMeasurements = []string{"Temperature_Avg", "Humidity_Avg", "Windspeed_Avg", "Wind Direction_Avg", "Pressure_Avg", "Rainfall_Acc", "Windspeed_Max"}
 )
 
 // Record represents a single data entry
@@ -38,8 +41,7 @@ func zeroPad(num string) string {
 }
 
 // parseRow interprets a single line of input data
-// parseRow interprets a single line of input data
-func parseRow(line string) (Record, error) {
+func parseRow(line string, cutoff time.Time) (Record, error) {
 	fields := strings.Split(line, ",")
 	if len(fields) < 7 {
 		return Record{}, fmt.Errorf("invalid row: %s", line)
@@ -52,7 +54,18 @@ func parseRow(line string) (Record, error) {
 	day := zeroPad(fields[5])
 	month := zeroPad(fields[6])
 	year := fields[7]
-	timestamp := fmt.Sprintf("%s-%s-%sT%s:%s:%s", year, month, day, hour, minute, second)
+	timestampStr := fmt.Sprintf("%s-%s-%sT%s:%s:%s", year, month, day, hour, minute, second)
+
+	// Parse the timestamp
+	recordTime, err := time.Parse("2006-01-02T15:04:05", timestampStr)
+	if err != nil {
+		return Record{}, fmt.Errorf("invalid timestamp: %s", timestampStr)
+	}
+
+	// Skip rows older than the cutoff date
+	if recordTime.Before(cutoff) {
+		return Record{Timestamp: ""}, nil
+	}
 
 	values := make(map[string]string)
 	for i := 8; i < len(fields)-1; i += 3 {
@@ -73,21 +86,15 @@ func parseRow(line string) (Record, error) {
 		}
 	}
 
-	return Record{StationID: stationID, Timestamp: timestamp, Values: values}, nil
+	return Record{StationID: stationID, Timestamp: timestampStr, Values: values}, nil
 }
 
-// processFile processes an input file and appends valid records to the output
-func processFile(filePath string, writer *csv.Writer, writeHeader bool) error {
+func processFile(filePath string, writer *csv.Writer, writeHeader bool, cutoff time.Time) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("cannot open file %s: %v", filePath, err)
 	}
 	defer file.Close()
-
-	//if writeHeader {
-	//	header := append([]string{"station_id", "timestamp"}, requiredMeasurements...)
-	//	writer.Write(header)
-	//}
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -96,10 +103,14 @@ func processFile(filePath string, writer *csv.Writer, writeHeader bool) error {
 			continue
 		}
 
-		record, err := parseRow(line)
+		record, err := parseRow(line, cutoff)
 		if err != nil {
 			fmt.Printf("Skipping line due to error: %v\n", err)
 			continue
+		}
+
+		if record.Timestamp == "" {
+			continue // Skip if the record is too old
 		}
 
 		row := []string{record.StationID, record.Timestamp}
@@ -118,12 +129,24 @@ func processFile(filePath string, writer *csv.Writer, writeHeader bool) error {
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: go run main.go <input_directory> <output_file>")
+		fmt.Println("Usage: go run main.go <input_directory> <output_file> [days]")
 		return
 	}
 
 	inputDir := os.Args[1]
 	outputFile := os.Args[2]
+	days := 14 // Default to 14 days
+	if len(os.Args) > 3 {
+		var err error
+		days, err = strconv.Atoi(os.Args[3])
+		if err != nil {
+			fmt.Printf("Invalid days value: %v\n", err)
+			return
+		}
+	}
+
+	// Calculate the cutoff date
+	cutoff := time.Now().AddDate(0, 0, -days)
 
 	out, err := os.Create(outputFile)
 	if err != nil {
@@ -143,7 +166,7 @@ func main() {
 		}
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".txt") {
 			fmt.Printf("Processing file: %s\n", path)
-			err := processFile(path, writer, writeHeader)
+			err := processFile(path, writer, writeHeader, cutoff)
 			if err != nil {
 				fmt.Printf("Error processing file %s: %v\n", path, err)
 			} else {
