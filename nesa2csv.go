@@ -38,6 +38,7 @@ func zeroPad(num string) string {
 }
 
 // parseRow interprets a single line of input data
+// parseRow interprets a single line of input data
 func parseRow(line string) (Record, error) {
 	fields := strings.Split(line, ",")
 	if len(fields) < 7 {
@@ -64,7 +65,11 @@ func parseRow(line string) (Record, error) {
 			}
 		}
 		if measurementName != "" && i+2 < len(fields) {
-			values[measurementName] = fields[i+2]
+			value := fields[i+2]
+			if value == "*" { // Replace missing data with an empty string
+				value = ""
+			}
+			values[measurementName] = value
 		}
 	}
 
@@ -79,10 +84,10 @@ func processFile(filePath string, writer *csv.Writer, writeHeader bool) error {
 	}
 	defer file.Close()
 
-	if writeHeader {
-		header := append([]string{"station_id", "timestamp"}, requiredMeasurements...)
-		writer.Write(header)
-	}
+	//if writeHeader {
+	//	header := append([]string{"station_id", "timestamp"}, requiredMeasurements...)
+	//	writer.Write(header)
+	//}
 
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
