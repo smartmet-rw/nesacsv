@@ -10,16 +10,16 @@ import (
 )
 
 var (
-	// Mapping measurement IDs to names
-	measurementMap = map[string]string{
-		"1": "Temperature",
-		"6": "Dewpoint",
-		"5": "Windspeed",
-		"4": "Wind Direction",
-		"3": "Pressure",
+	// Mapping measurement ID and processing ID to parameter names
+	measurementMap = map[string]map[string]string{
+		"1":  {"2": "Temperature_Avg", "3": "Temperature_Min", "4": "Temperature_Max"},
+		"2":  {"2": "Humidity_Avg", "3": "Humidity_Min", "4": "Humidity_Max"},
+		"9":  {"2": "Windspeed_Avg", "3": "Windspeed_Min", "4": "Windspeed_Max"},
+		"4":  {"2": "Wind Direction_Avg", "3": "Wind Direction_Min", "4": "Wind Direction_Max"},
+		"13": {"2": "Pressure_Avg", "3": "Pressure_Min", "4": "Pressure_Max"},
 	}
 	// Required measurements
-	requiredMeasurements = []string{"Temperature", "Dewpoint", "Windspeed", "Wind Direction", "Pressure"}
+	requiredMeasurements = []string{"Temperature_Avg", "Humidity_Avg", "Windspeed_Avg", "Wind Direction_Avg", "Pressure_Avg"}
 )
 
 // Record represents a single data entry
@@ -29,6 +29,14 @@ type Record struct {
 	Values    map[string]string
 }
 
+// zeroPad ensures single-digit numbers are padded with a leading zero
+func zeroPad(num string) string {
+	if len(num) == 1 {
+		return "0" + num
+	}
+	return num
+}
+
 // parseRow interprets a single line of input data
 func parseRow(line string) (Record, error) {
 	fields := strings.Split(line, ",")
@@ -36,15 +44,25 @@ func parseRow(line string) (Record, error) {
 		return Record{}, fmt.Errorf("invalid row: %s", line)
 	}
 
-	stationID := fields[1]
-	time := fmt.Sprintf("%s:%s:%s", fields[2], fields[3], fields[4])
-	date := fmt.Sprintf("%s-%s-%s", fields[5], fields[6], fields[7])
-	timestamp := fmt.Sprintf("%sT%s", date, time)
+	stationID := strings.TrimLeft(fields[1], "0") // Remove leading zeros from the station ID
+	hour := zeroPad(fields[2])
+	minute := zeroPad(fields[3])
+	second := zeroPad(fields[4])
+	day := zeroPad(fields[5])
+	month := zeroPad(fields[6])
+	year := fields[7]
+	timestamp := fmt.Sprintf("%s-%s-%sT%s:%s:%s", year, month, day, hour, minute, second)
 
 	values := make(map[string]string)
 	for i := 8; i < len(fields)-1; i += 3 {
-		id := fields[i]
-		measurementName := measurementMap[id]
+		measurementID := fields[i]
+		processingID := fields[i+1]
+		measurementName := ""
+		if processingMap, exists := measurementMap[measurementID]; exists {
+			if name, ok := processingMap[processingID]; ok {
+				measurementName = name
+			}
+		}
 		if measurementName != "" && i+2 < len(fields) {
 			values[measurementName] = fields[i+2]
 		}
