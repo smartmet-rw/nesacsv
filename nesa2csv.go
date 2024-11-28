@@ -14,15 +14,19 @@ import (
 var (
 	// Mapping measurement ID and processing ID to parameter names
 	measurementMap = map[string]map[string]string{
-		"1":  {"2": "Temperature_Avg", "3": "Temperature_Min", "4": "Temperature_Max"},
-		"2":  {"2": "Humidity_Avg", "3": "Humidity_Min", "4": "Humidity_Max"},
-		"9":  {"2": "Windspeed_Avg", "3": "Windspeed_Min", "4": "Windspeed_Max"},
-		"4":  {"2": "Wind Direction_Avg", "3": "Wind Direction_Min", "4": "Wind Direction_Max"},
-		"13": {"2": "Pressure_Avg", "3": "Pressure_Min", "4": "Pressure_Max"},
-		"10": {"7": "Rainfall_Acc"},
+		"1":   {"2": "Temperature_Avg", "3": "Temperature_Min", "4": "Temperature_Max"},
+		"2":   {"2": "Humidity_Avg", "3": "Humidity_Min", "4": "Humidity_Max"},
+		"9":   {"2": "Windspeed_Avg", "3": "Windspeed_Min", "4": "Windspeed_Max"},
+		"4":   {"2": "Wind Direction_Avg", "3": "Wind Direction_Min", "4": "Wind Direction_Max"},
+		"13":  {"2": "Pressure_Avg", "3": "Pressure_Min", "4": "Pressure_Max"},
+		"10":  {"7": "Rainfall_Acc"},
+		"51":  {"2": "Soiltemperature10_Avg"},
+		"101": {"2": "Soiltemperature20_Avg"},
+		"151": {"2": "Soiltemperature50_Avg"},
+		"201": {"2": "Soiltemperature100_Avg"},
 	}
 	// Required measurements
-	requiredMeasurements = []string{"Temperature_Avg", "Humidity_Avg", "Windspeed_Avg", "Wind Direction_Avg", "Pressure_Avg", "Rainfall_Acc", "Windspeed_Max"}
+	requiredMeasurements = []string{"Temperature_Avg", "Humidity_Avg", "Windspeed_Avg", "Wind Direction_Avg", "Pressure_Avg", "Rainfall_Acc", "Windspeed_Max", "Soiltemperature10_Avg", "Soiltemperature20_Avg", "Soiltemperature50_Avg", "Soiltemperature100_Avg"}
 )
 
 // Record represents a single data entry
