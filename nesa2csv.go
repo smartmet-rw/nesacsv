@@ -44,8 +44,7 @@ func zeroPad(num string) string {
 	return num
 }
 
-// parseRow interprets a single line of input data
-func parseRow(line string, cutoff time.Time) (Record, error) {
+func parseRow(line string, cutoff time.Time, timeDifference int) (Record, error) {
 	fields := strings.Split(line, ",")
 	if len(fields) < 7 {
 		return Record{}, fmt.Errorf("invalid row: %s", line)
@@ -60,14 +59,17 @@ func parseRow(line string, cutoff time.Time) (Record, error) {
 	year := fields[7]
 	timestampStr := fmt.Sprintf("%s-%s-%sT%s:%s:%s", year, month, day, hour, minute, second)
 
-	// Parse the timestamp
-	recordTime, err := time.Parse("2006-01-02T15:04:05", timestampStr)
+	// Parse the timestamp in local time
+	localTime, err := time.Parse("2006-01-02T15:04:05", timestampStr)
 	if err != nil {
 		return Record{}, fmt.Errorf("invalid timestamp: %s", timestampStr)
 	}
 
+	// Adjust for UTC by subtracting the time difference
+	utcTime := localTime.Add(-time.Duration(timeDifference) * time.Hour)
+
 	// Skip rows older than the cutoff date
-	if recordTime.Before(cutoff) {
+	if utcTime.Before(cutoff) {
 		return Record{Timestamp: ""}, nil
 	}
 
@@ -90,10 +92,10 @@ func parseRow(line string, cutoff time.Time) (Record, error) {
 		}
 	}
 
-	return Record{StationID: stationID, Timestamp: timestampStr, Values: values}, nil
+	return Record{StationID: stationID, Timestamp: utcTime.Format("2006-01-02T15:04:05"), Values: values}, nil
 }
 
-func processFile(filePath string, writer *csv.Writer, writeHeader bool, cutoff time.Time) error {
+func processFile(filePath string, writer *csv.Writer, writeHeader bool, cutoff time.Time, timeDifference int) error {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("cannot open file %s: %v", filePath, err)
@@ -107,7 +109,7 @@ func processFile(filePath string, writer *csv.Writer, writeHeader bool, cutoff t
 			continue
 		}
 
-		record, err := parseRow(line, cutoff)
+		record, err := parseRow(line, cutoff, timeDifference)
 		if err != nil {
 			fmt.Printf("Skipping line due to error: %v\n", err)
 			continue
@@ -133,18 +135,29 @@ func processFile(filePath string, writer *csv.Writer, writeHeader bool, cutoff t
 
 func main() {
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: go run main.go <input_directory> <output_file> [days]")
+		fmt.Println("Usage: go run main.go <input_directory> <output_file> [days] [time_difference_in_hours]")
 		return
 	}
 
 	inputDir := os.Args[1]
 	outputFile := os.Args[2]
-	days := 14 // Default to 14 days
+	days := 14          // Default to 14 days
+	timeDifference := 2 // Default to 2 hours
+
 	if len(os.Args) > 3 {
 		var err error
 		days, err = strconv.Atoi(os.Args[3])
 		if err != nil {
 			fmt.Printf("Invalid days value: %v\n", err)
+			return
+		}
+	}
+
+	if len(os.Args) > 4 {
+		var err error
+		timeDifference, err = strconv.Atoi(os.Args[4])
+		if err != nil {
+			fmt.Printf("Invalid time difference value: %v\n", err)
 			return
 		}
 	}
@@ -170,7 +183,7 @@ func main() {
 		}
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".txt") {
 			fmt.Printf("Processing file: %s\n", path)
-			err := processFile(path, writer, writeHeader, cutoff)
+			err := processFile(path, writer, writeHeader, cutoff, timeDifference)
 			if err != nil {
 				fmt.Printf("Error processing file %s: %v\n", path, err)
 			} else {
